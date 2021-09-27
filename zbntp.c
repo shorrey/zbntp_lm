@@ -206,5 +206,6 @@ static int zbntp_get_stratum(AGENT_REQUEST *request, AGENT_RESULT *result)
     if (ret != SYSINFO_RET_OK) {
         return ret;
     }
+    SET_UI64_RESULT(result, pc->response.stratum);
     return SYSINFO_RET_OK;
 }

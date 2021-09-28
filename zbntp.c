@@ -13,17 +13,19 @@
 
 
 /* timeout for item processing */
-static int item_timeout = 1;
+static struct timeval item_timeout;
 
 
+/* exported metrics */
 static int zbntp_get_stratum(AGENT_REQUEST *request, AGENT_RESULT *result);
 
 static ZBX_METRIC keys[] = {
-    {"zbxntp.stratum", CF_HAVEPARAMS, zbntp_get_stratum, "127.0.0.1,123"},
+    {"zbntp.stratum", CF_HAVEPARAMS, zbntp_get_stratum, "127.0.0.1,123"},
     {NULL}
 };
 
 
+/* NTP packet structure */
 typedef struct {
     uint8_t li_ver_mode;
     uint8_t stratum;
@@ -66,7 +68,11 @@ int	zbx_module_api_version(void)
 
 void zbx_module_item_timeout(int timeout)
 {
-	item_timeout = timeout;
+    zabbix_log(LOG_LEVEL_INFORMATION,
+               "%s: setting item timeout = %d",
+               MODULE_NAME, timeout);
+    item_timeout.tv_sec = timeout;
+    item_timeout.tv_usec = 0;
 }
 
 int zbx_module_init(void)
@@ -75,6 +81,11 @@ int zbx_module_init(void)
                "Module: %s - build with agent: %d.%d.%d (%s:%d)",
                MODULE_NAME, ZABBIX_VERSION_MAJOR, ZABBIX_VERSION_MINOR,
                ZABBIX_VERSION_PATCH, __FILE__, __LINE__);
+
+    /* set default timeout */
+    item_timeout.tv_sec = 1;
+    item_timeout.tv_usec = 0;
+
     return ZBX_MODULE_OK;
 }
 
@@ -96,6 +107,7 @@ ZBX_METRIC *zbx_module_item_list(void)
 }
 
 
+/* network side */
 int zbntp_do_request(AGENT_RESULT *result, PacketCache *response)
 {
     int sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
@@ -103,38 +115,43 @@ int zbntp_do_request(AGENT_RESULT *result, PacketCache *response)
         zabbix_log(LOG_LEVEL_ERR,
                    "%s: Can not create socket (%s:%d)",
                    MODULE_NAME, __FILE__, __LINE__);
+        SET_MSG_RESULT(result, strdup("Internal module error"));
         return SYSINFO_RET_FAIL;
     }
+
     const struct sockaddr_in saddr = response->server_addr;
-    if (connect(sock, (struct sockaddr *)&saddr, sizeof(struct sockaddr_in)) < 0) {
+    if (connect(sock, (struct sockaddr *)&saddr, sizeof(struct sockaddr)) < 0) {
         zabbix_log(LOG_LEVEL_ERR,
                    "%s: Can not connect to socket (%s:%d)",
                    MODULE_NAME, __FILE__, __LINE__);
+        SET_MSG_RESULT(result, strdup("Internal module error"));
         return SYSINFO_RET_FAIL;
     }
-    int ret = write(sock, &empty_request, sizeof(empty_request));
-    if (ret < 0) {
-        zabbix_log(LOG_LEVEL_ERR,
-                   "%s: Error while sending request (%s:%d)",
-                   MODULE_NAME, __FILE__, __LINE__);
-        return SYSINFO_RET_FAIL;
-    }
+
+    setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO,
+               (const char *)&item_timeout, sizeof(item_timeout));
     
-    struct timeval timeout;
-    timeout.tv_sec = item_timeout;
-    timeout.tv_usec = 0;
-    setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, (const char *)&timeout, sizeof(timeout));
+    if (write(sock, &empty_request, sizeof(empty_request))) {
+        zabbix_log(LOG_LEVEL_ERR,
+                   "%s: Error while sending request: %s (%s:%d)",
+                   MODULE_NAME, strerror(errno), __FILE__, __LINE__);
+        SET_MSG_RESULT(result, strdup("Error while sending request"));
+        return SYSINFO_RET_FAIL;
+    }
     
     if(read(sock, &(response->response), sizeof(ntp_data)) < 0) {
+        char* strerr = strerror(errno);
         zabbix_log(LOG_LEVEL_ERR,
-                   "%s: Error while reading response (%s:%d)",
-                   MODULE_NAME, __FILE__, __LINE__);
+                   "%s: Error while reading response: %s (%s:%d)",
+                   MODULE_NAME, strerr, __FILE__, __LINE__);
+        SET_MSG_RESULT(result, strdup(strerr));
         return SYSINFO_RET_FAIL;
     }
     response->request_time = time(NULL);
     return SYSINFO_RET_OK;
 }
 
+/* work with cached responses. common function for all metrics */
 int zbntp_get_response(AGENT_REQUEST *request, AGENT_RESULT *result, PacketCache **response)
 {
     char *host;
@@ -182,7 +199,7 @@ int zbntp_get_response(AGENT_REQUEST *request, AGENT_RESULT *result, PacketCache
     /* create new element in cache */
     pc = (PacketCache *) malloc(sizeof(PacketCache));
     if (pc == NULL) {
-        SET_MSG_RESULT(result, strdup("Can not allocate memory!"));
+        SET_MSG_RESULT(result, strdup("Memory allocation error"));
         return SYSINFO_RET_FAIL;
     }
     pc->next = NULL;
@@ -196,16 +213,29 @@ int zbntp_get_response(AGENT_REQUEST *request, AGENT_RESULT *result, PacketCache
         last_pc->next = pc;
     }
     
+    *response = pc;
     return zbntp_do_request(result, pc);
 }
 
 static int zbntp_get_stratum(AGENT_REQUEST *request, AGENT_RESULT *result)
 {
     PacketCache* pc = NULL;
+    
     int ret = zbntp_get_response(request, result, &pc);
     if (ret != SYSINFO_RET_OK) {
         return ret;
     }
+
+    /* pedantic */
+    if (pc == NULL) {
+        zabbix_log(LOG_LEVEL_ERR,
+                   "%s: internal module error (%s:%d)",
+                   MODULE_NAME, __FILE__, __LINE__);
+        SET_MSG_RESULT(result, strdup("Internal module error"));
+        return SYSINFO_RET_FAIL;
+    }
+    
+    /* pofigistic */
     SET_UI64_RESULT(result, pc->response.stratum);
     return SYSINFO_RET_OK;
 }

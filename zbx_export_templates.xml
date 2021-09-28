@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<zabbix_export>
+    <version>5.0</version>
+    <date>2021-09-28T14:28:56Z</date>
+    <groups>
+        <group>
+            <name>Templates/Applications</name>
+        </group>
+    </groups>
+    <templates>
+        <template>
+            <template>NTP Service</template>
+            <name>NTP Service</name>
+            <description>Monitor NTP service using loadable module zbntp_lm: https://github.com/shorrey/zbntp_lm</description>
+            <groups>
+                <group>
+                    <name>Templates/Applications</name>
+                </group>
+            </groups>
+            <applications>
+                <application>
+                    <name>NTP service</name>
+                </application>
+            </applications>
+            <items>
+                <item>
+                    <name>Stratum</name>
+                    <type>SIMPLE</type>
+                    <key>zbntp.stratum[{HOST.IP}]</key>
+                    <applications>
+                        <application>
+                            <name>NTP service</name>
+                        </application>
+                    </applications>
+                </item>
+            </items>
+        </template>
+    </templates>
+</zabbix_export>

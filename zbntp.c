@@ -160,6 +160,7 @@ int zbntp_get_response(AGENT_REQUEST *request, AGENT_RESULT *result, PacketCache
     int port = 123;
     struct sockaddr_in addr;
     time_t now = time(NULL);
+    static pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
     
     /* try to get addr:port from request */
     if (1 > request->nparam) {
@@ -198,10 +199,16 @@ int zbntp_get_response(AGENT_REQUEST *request, AGENT_RESULT *result, PacketCache
         last_pc = pc;
         pc = pc->next;
     }
+    
     /* create new element in cache */
+    /* Save the thread! */
+    pthread_mutex_lock(&mutex);
+    
     pc = (PacketCache *) malloc(sizeof(PacketCache));
     if (pc == NULL) {
         SET_MSG_RESULT(result, strdup("Memory allocation error"));
+        /* don't forget to free mutex */
+        pthread_mutex_unlock(&mutex);
         return SYSINFO_RET_FAIL;
     }
     pc->next = NULL;
@@ -214,6 +221,9 @@ int zbntp_get_response(AGENT_REQUEST *request, AGENT_RESULT *result, PacketCache
     else {
         last_pc->next = pc;
     }
+    
+    /* free mutex */
+    pthread_mutex_unlock(&mutex);
     
     *response = pc;
     return zbntp_do_request(result, pc);

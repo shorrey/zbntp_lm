@@ -17,9 +17,11 @@ static struct timeval item_timeout;
 
 
 /* exported metrics */
+static int zbntp_get_online(AGENT_REQUEST *request, AGENT_RESULT *result);
 static int zbntp_get_stratum(AGENT_REQUEST *request, AGENT_RESULT *result);
 
 static ZBX_METRIC keys[] = {
+    {"zbntp.online",  CF_HAVEPARAMS, zbntp_get_online,  "127.0.0.1,123"},
     {"zbntp.stratum", CF_HAVEPARAMS, zbntp_get_stratum, "127.0.0.1,123"},
     {NULL}
 };
@@ -217,6 +219,19 @@ int zbntp_get_response(AGENT_REQUEST *request, AGENT_RESULT *result, PacketCache
     return zbntp_do_request(result, pc);
 }
 
+static int zbntp_get_online(AGENT_REQUEST *request, AGENT_RESULT *result)
+{
+    PacketCache* pc = NULL;
+    int is_online = 1;
+    
+    if (zbntp_get_response(request, result, &pc) != SYSINFO_RET_OK) {
+        is_online = 0;
+    }
+    
+    SET_UI64_RESULT(result, is_online);
+    return SYSINFO_RET_OK;
+}
+
 static int zbntp_get_stratum(AGENT_REQUEST *request, AGENT_RESULT *result)
 {
     PacketCache* pc = NULL;
@@ -226,15 +241,6 @@ static int zbntp_get_stratum(AGENT_REQUEST *request, AGENT_RESULT *result)
         return ret;
     }
 
-    /* pedantic */
-    if (pc == NULL) {
-        zabbix_log(LOG_LEVEL_ERR,
-                   "%s: internal module error (%s:%d)",
-                   MODULE_NAME, __FILE__, __LINE__);
-        SET_MSG_RESULT(result, strdup("Internal module error"));
-        return SYSINFO_RET_FAIL;
-    }
-    
     /* pofigistic */
     SET_UI64_RESULT(result, pc->response.stratum);
     return SYSINFO_RET_OK;

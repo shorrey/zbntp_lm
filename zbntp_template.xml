@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<zabbix_export>
+    <version>5.2</version>
+    <date>2021-09-30T20:22:43Z</date>
+    <groups>
+        <group>
+            <name>Templates/Applications</name>
+        </group>
+    </groups>
+    <templates>
+        <template>
+            <template>NTP Service</template>
+            <name>NTP Service</name>
+            <description>Monitor NTP service using loadable module zbntp_lm: https://github.com/shorrey/zbntp_lm</description>
+            <groups>
+                <group>
+                    <name>Templates/Applications</name>
+                </group>
+            </groups>
+            <applications>
+                <application>
+                    <name>NTP service</name>
+                </application>
+            </applications>
+            <items>
+                <item>
+                    <name>Online</name>
+                    <type>SIMPLE</type>
+                    <key>zbntp.online[{HOST.IP}]</key>
+                    <history>1w</history>
+                    <applications>
+                        <application>
+                            <name>NTP service</name>
+                        </application>
+                    </applications>
+                    <valuemap>
+                        <name>Host availability</name>
+                    </valuemap>
+                </item>
+                <item>
+                    <name>Stratum</name>
+                    <type>SIMPLE</type>
+                    <key>zbntp.stratum[{HOST.IP}]</key>
+                    <history>1w</history>
+                    <applications>
+                        <application>
+                            <name>NTP service</name>
+                        </application>
+                    </applications>
+                </item>
+            </items>
+        </template>
+    </templates>
+    <value_maps>
+        <value_map>
+            <name>Host availability</name>
+            <mappings>
+                <mapping>
+                    <value>0</value>
+                    <newvalue>not available</newvalue>
+                </mapping>
+                <mapping>
+                    <value>1</value>
+                    <newvalue>available</newvalue>
+                </mapping>
+                <mapping>
+                    <value>2</value>
+                    <newvalue>unknown</newvalue>
+                </mapping>
+            </mappings>
+        </value_map>
+    </value_maps>
+</zabbix_export>

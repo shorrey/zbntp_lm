@@ -131,7 +131,7 @@ int zbntp_do_request(AGENT_RESULT *result, PacketCache *response)
     setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO,
                (const char *)&item_timeout, sizeof(item_timeout));
     
-    if (write(sock, &empty_request, sizeof(empty_request))) {
+    if (write(sock, &empty_request, sizeof(empty_request)) < 0) {
         zabbix_log(LOG_LEVEL_ERR,
                    "%s: Error while sending request: %s (%s:%d)",
                    MODULE_NAME, strerror(errno), __FILE__, __LINE__);

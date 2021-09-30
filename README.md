@@ -1,19 +1,34 @@
 # zbntp_lm - Zabbix NTP Loadable Module
-Подгружаемый модуль Zabbix для мониторинга NTP-серверов путём посылки простого запроса и анализа ответа.
 
-- Почему не понравилось парсить вывод команды, например, "ntpdate -q"  
-потому что каждый запрос будет порождать форки. Хоть это обычно и не
-является большой нагрузкой на сервер, считаю саму идею ущербной.
+Zabbix loadable module for monitoring NTP servers by sending a simple request and analyzing its response.
 
-- Почему именно анализ ответа сервера, а не реализация chronyc или ntpq, например  
-потому что это должно стать простым и универсальным средством
-проверки работоспособности и качества сервиса. Независимо от его реализации.
-По этой же причине не понравился анализ журналов соответствующих приложений, хотя он мог бы дать много дополнительной информации.
+## Purpose
 
-- Почему не понравился стандартный шаблон "NTP Service"  
-потому что он определяет только факт ответа на запрос, а что там внутри... А ведь NTP-сервер
-со stratum=16 тоже будет отвечать.
+### Why don't parse "ntpdate -q" output, for example
 
-- Почему внутри должен быть кеш ответов  
-потому что каждый ответ даёт множество метрик. Если пользователь решит получать все доступные метрики, на
-каждый запрос метрики должен быть послан отдельный, но идентичный запрос серверу. А "спамить" NTP-сервера также некрасиво, как запускать внешние бинарники.
+Because every request cause a fork(). It is just unworthy behavior.
+
+### Why don't realize chronyc or ntpq, for example
+
+Because it is very difficulty and not universally.
+
+### Why don't use "NNTP Service" template
+
+Because it is too poor and gives information only about answer on udp port 123.
+NTP-server with stratum-16 will answer too, as if it's all right.
+
+### Why there is answers cache inside
+
+Because each answer contains information for various metrics. Zabbix, on the other hand, requests one metric on one time.
+Why, in this case, send a tons of same requests to NTP-server? It is better to analyze recently received answers.
+
+## Building and installation
+
+- First of all, one must have Zabbix sources: https://github.com/zabbix/zabbix
+- Go to src/modules and do
+
+      git clone https://github.com/shorrey/zbntp_lm.git
+ - make
+ - copy zbntp.so to modules directory of your Zabbix server (/usr/lib/zabbix/modules in my case)
+ - restart zabbix-server
+ - import zbntp_template.xml as template

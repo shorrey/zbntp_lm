@@ -2,6 +2,11 @@
 
 Zabbix loadable module for monitoring NTP servers by sending a simple request and analyzing its response.
 
+Now this module is under initial development and supports next metrics:
+
+- zbntp.online - values 0: offline, 1: online, 2: unknown (not supported yet)
+- zbntp.stratum
+
 ## Purpose
 
 ### Why don't parse "ntpdate -q" output, for example

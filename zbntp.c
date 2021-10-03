@@ -19,10 +19,12 @@ static struct timeval item_timeout;
 /* exported metrics */
 static int zbntp_get_online(AGENT_REQUEST *request, AGENT_RESULT *result);
 static int zbntp_get_stratum(AGENT_REQUEST *request, AGENT_RESULT *result);
+static int zbntp_get_diff(AGENT_REQUEST *request, AGENT_RESULT *result);
 
 static ZBX_METRIC keys[] = {
     {"zbntp.online",  CF_HAVEPARAMS, zbntp_get_online,  "127.0.0.1,123"},
     {"zbntp.stratum", CF_HAVEPARAMS, zbntp_get_stratum, "127.0.0.1,123"},
+    {"zbntp.diff",    CF_HAVEPARAMS, zbntp_get_diff,    "127.0.0.1,123"},
     {NULL}
 };
 
@@ -39,10 +41,14 @@ typedef struct {
     /* refid representation depends on stratum. read wiki :) */
     uint32_t refid;
     /* next fields must be divided by 2^32 */
-    uint64_t reference_ts;
-    uint64_t origin_ts;
-    uint64_t receive_ts;
-    uint64_t transmit_ts;
+    uint32_t reference_ts_int;
+    uint32_t reference_ts_frac;
+    uint32_t origin_ts_int;
+    uint32_t origin_ts_frac;
+    uint32_t receive_ts_int;
+    uint32_t receive_ts_frac;
+    uint32_t transmit_ts_int;
+    uint32_t transmit_ts_frac;
 } ntp_data;
 
 
@@ -51,6 +57,8 @@ typedef struct PacketCache PacketCache;
 struct PacketCache {
     struct sockaddr_in server_addr;
     time_t request_time;
+    struct timeval send_ts;
+    struct timeval receive_ts;
     ntp_data response;
     PacketCache* next;
 };
@@ -59,7 +67,7 @@ static PacketCache* zbntp_cache = NULL;
 
 /* packet to send. constants were taken from 'ntpdate -q' dump with
  * some variation */
-const ntp_data empty_request = {0xe3, 0, 10, 0xfa, 0x10000, 0x10000, 0, 0, 0, 0};
+const ntp_data empty_request = {0xe3, 0, 10, 0xfa, 0x00000100, 0x00000100, 0, 0, 0, 0, 0, 0, 0, 0};
 
 
 /* some common functions */
@@ -134,6 +142,8 @@ int zbntp_do_request(AGENT_RESULT *result, PacketCache *response)
     setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO,
                (const char *)&item_timeout, sizeof(item_timeout));
     
+    gettimeofday(&(response->send_ts), NULL);
+    
     if (write(sock, &empty_request, sizeof(empty_request)) < 0) {
         close(sock);
         zabbix_log(LOG_LEVEL_ERR,
@@ -152,6 +162,9 @@ int zbntp_do_request(AGENT_RESULT *result, PacketCache *response)
         SET_MSG_RESULT(result, strdup(strerr));
         return SYSINFO_RET_FAIL;
     }
+    
+    gettimeofday(&(response->receive_ts), NULL);
+    
     close(sock);
     response->request_time = time(NULL);
     return SYSINFO_RET_OK;
@@ -257,5 +270,24 @@ static int zbntp_get_stratum(AGENT_REQUEST *request, AGENT_RESULT *result)
 
     /* pofigistic */
     SET_UI64_RESULT(result, pc->response.stratum);
+    return SYSINFO_RET_OK;
+}
+
+static int zbntp_get_diff(AGENT_REQUEST *request, AGENT_RESULT *result)
+{
+    PacketCache* pc = NULL;
+    
+    int ret = zbntp_get_response(request, result, &pc);
+    if (ret != SYSINFO_RET_OK) {
+        return ret;
+    }
+    
+    double_t local_time = (pc->send_ts.tv_sec + pc->receive_ts.tv_sec) / 2.0 +
+                          (pc->send_ts.tv_usec + pc->receive_ts.tv_usec) / 2000000.0;
+    
+    double_t server_time = ntohl(pc->response.transmit_ts_int) - 2208988800 +
+                           ntohl(pc->response.transmit_ts_frac) / 4294967296.0;
+    
+    SET_DBL_RESULT(result, server_time - local_time);
     return SYSINFO_RET_OK;
 }

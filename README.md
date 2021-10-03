@@ -6,6 +6,7 @@ Now this module is under initial development and supports next metrics:
 
 - zbntp.online - values 0: offline, 1: online, 2: unknown (not supported yet)
 - zbntp.stratum
+- zbntp.diff - difference between local and server time (s)
 
 ## Purpose
 

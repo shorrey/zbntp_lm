@@ -115,17 +115,18 @@ int zbntp_do_request(AGENT_RESULT *result, PacketCache *response)
     int sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
     if (sock < 0) {
         zabbix_log(LOG_LEVEL_ERR,
-                   "%s: Can not create socket (%s:%d)",
-                   MODULE_NAME, __FILE__, __LINE__);
+                   "%s: Can not create socket: %s (%s:%d)",
+                   MODULE_NAME, strerror(errno), __FILE__, __LINE__);
         SET_MSG_RESULT(result, strdup("Internal module error"));
         return SYSINFO_RET_FAIL;
     }
 
     const struct sockaddr_in saddr = response->server_addr;
     if (connect(sock, (struct sockaddr *)&saddr, sizeof(struct sockaddr)) < 0) {
+        close(sock);
         zabbix_log(LOG_LEVEL_ERR,
-                   "%s: Can not connect to socket (%s:%d)",
-                   MODULE_NAME, __FILE__, __LINE__);
+                   "%s: Can not connect to socket: %s (%s:%d)",
+                   MODULE_NAME, strerror(errno), __FILE__, __LINE__);
         SET_MSG_RESULT(result, strdup("Internal module error"));
         return SYSINFO_RET_FAIL;
     }
@@ -134,6 +135,7 @@ int zbntp_do_request(AGENT_RESULT *result, PacketCache *response)
                (const char *)&item_timeout, sizeof(item_timeout));
     
     if (write(sock, &empty_request, sizeof(empty_request)) < 0) {
+        close(sock);
         zabbix_log(LOG_LEVEL_ERR,
                    "%s: Error while sending request: %s (%s:%d)",
                    MODULE_NAME, strerror(errno), __FILE__, __LINE__);
@@ -142,6 +144,7 @@ int zbntp_do_request(AGENT_RESULT *result, PacketCache *response)
     }
     
     if(read(sock, &(response->response), sizeof(ntp_data)) < 0) {
+        close(sock);
         char* strerr = strerror(errno);
         zabbix_log(LOG_LEVEL_ERR,
                    "%s: Error while reading response: %s (%s:%d)",
@@ -149,6 +152,7 @@ int zbntp_do_request(AGENT_RESULT *result, PacketCache *response)
         SET_MSG_RESULT(result, strdup(strerr));
         return SYSINFO_RET_FAIL;
     }
+    close(sock);
     response->request_time = time(NULL);
     return SYSINFO_RET_OK;
 }
